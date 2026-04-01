@@ -4,53 +4,52 @@
 import Vapor
 import Quiver
 
-// This demo mimics the functionality of a vector database.
-// In production, vectors would be stored in SQLite, Postgres, or any
-// data source — Quiver handles all the pre and post data processing:
-// similarity scoring, search ranking, classification, and feature scaling.
-// The [Double] from Codable JSON IS the [Double] Quiver computes on.
-// No Python bridge, no subprocess, no serialization boundary.
+// Four CRUD endpoints for a semantic product catalog. Vapor handles
+// HTTP routing and JSON serialization. Quiver handles the intelligence —
+// every product added is automatically tokenized and embedded, and
+// every search query is matched by meaning rather than keywords.
 
 func routes(_ app: Application) throws {
 
-    // Health check
-    app.get("health") { _ in "Quiver Demo Server is running" }
+    // The store is seeded with 8 athletic products at startup.
+    // Each product's description has already been converted to a
+    // semantic vector by Quiver's tokenize → embed → meanVector pipeline.
+    let store = seededStore()
 
-    // Cosine similarity between two vectors — the operation that
-    // powers recommendation engines, search ranking, and duplicate
-    // detection. Runs in microseconds inside the request path.
-    app.post("similarity") { request async throws -> SimilarityResponse in
-        let input = try request.content.decode(SimilarityRequest.self)
-        let score = input.vectorA.cosineOfAngle(with: input.vectorB)
-        return SimilarityResponse(similarity: score)
+    // List all products in the catalog
+    app.get("products") { _ in
+        store.descriptions
     }
 
-    // Batch cosine similarity across an entire collection in one call.
-    // No database query, no vector index — Quiver computes directly
-    // on the arrays.
-    app.post("search") { request async throws -> [SearchResult] in
-        let input = try request.content.decode(SearchRequest.self)
-        let scores = input.catalog.cosineSimilarities(to: input.query)
-        let topMatches = scores.topIndices(k: input.topK)
-        return topMatches.map { SearchResult(index: $0.index, score: $0.score) }
+    // Add a product. Quiver's text pipeline runs automatically inside
+    // ProductStore.add() — the caller sends a plain text description,
+    // and Quiver converts it into a searchable vector behind the scenes.
+    app.post("products") { request throws -> HTTPStatus in
+        let input = try request.content.decode(AddRequest.self)
+        store.add(input.description)
+        return .created
     }
 
-    // Classify a new data point using KNN trained on the provided data.
-    // In production, the trained model would be loaded from Codable
-    // persistence rather than retrained per request.
-    app.post("classify") { request async throws -> ClassifyResponse in
-        let input = try request.content.decode(ClassifyRequest.self)
+    // Remove a product and its vector from the catalog
+    app.delete("products", ":description") { request -> HTTPStatus in
+        guard let description = request.parameters.get("description") else {
+            throw Abort(.badRequest)
+        }
+        return store.remove(description) ? .ok : .notFound
+    }
 
-        // FeatureScaler normalizes columns so no single feature dominates
-        let scaler = FeatureScaler.fit(features: input.trainingFeatures)
-
-        // KNN learns from the scaled training data
-        let model = KNearestNeighbors.fit(
-            features: scaler.transform(input.trainingFeatures),
-            labels: input.trainingLabels, k: 3)
-
-        let scaled = scaler.transform(input.newSamples)
-        let predictions = model.predict(scaled)
-        return ClassifyResponse(predictions: predictions)
+    // Semantic search — the hero endpoint. A plain text query is
+    // converted to a vector, then Quiver's cosineSimilarities ranks
+    // every product by directional similarity. "comfortable running
+    // shoes" finds "cushioned shoes for easy running" because the
+    // vectors point in the same direction — even though the words
+    // don't match. Five Quiver calls, zero external services.
+    app.get("search") { request -> [SearchResult] in
+        guard let query = request.query[String.self, at: "q"] else {
+            throw Abort(.badRequest, reason: "Missing query parameter ?q=")
+        }
+        return store.search(query: query).map {
+            SearchResult(rank: $0.rank, description: $0.label, similarity: $0.score)
+        }
     }
 }

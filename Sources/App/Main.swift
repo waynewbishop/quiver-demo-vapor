@@ -3,16 +3,10 @@
 
 import Vapor
 
-// Quiver Demo for Vapor
-// The [Double] that Codable decodes from JSON is the same [Double]
-// that Quiver computes on. No serialization boundary, no bridge
-// to another runtime. The server doesn't call a math service — it IS
-// the math service. This runs on Linux with zero Apple dependencies.
-
-// Quiver extends Swift's Array type but does not shadow any properties
-// or functions from Vapor, Fluent, or their dependencies. Element-wise
-// operators were replaced with named methods (.add(), .subtract()) to
-// avoid conflicts with stdlib concatenation. Quiver is purely additive.
+// Quiver Demo — Vapor Server
+// Semantic search, price prediction, and product clustering
+// running inside Vapor request handlers. One binary, swift run,
+// zero external services. Runs on macOS and Linux.
 
 @main
 struct App {

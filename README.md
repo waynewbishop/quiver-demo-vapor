@@ -1,34 +1,77 @@
-# Quiver Demo for Vapor
+# quiver-demo-vapor
 
-This demo mimics the functionality of a vector database. In production, vectors would be stored in SQLite, Postgres, or any data source — [Quiver](https://github.com/waynewbishop/quiver) handles all the pre and post data processing: similarity scoring, search ranking, classification, and feature scaling.
+Most search features match keywords — "running shoes" only finds results
+containing those exact words. Semantic search matches meaning instead,
+so "comfortable running shoes" finds "cushioned shoes for easy walks"
+because the concepts are similar even when the words are different.
 
-Most server-side ML requires bridging to a separate runtime. Quiver eliminates that bridge entirely. The `[Double]` that Vapor's `Codable` decodes from JSON is the same `[Double]` that Quiver computes on. No subprocess, no interprocess communication — the math runs inside the request handler with sub-millisecond overhead. Quiver extends Swift's Array type but does not shadow any properties or functions from Vapor or its dependencies.
+This demo uses [Quiver](https://github.com/waynewbishop/quiver) to add
+semantic search to a Vapor server. Products are stored as text
+descriptions. When added, each description is automatically converted
+to a numeric vector using Quiver's `tokenize()` → `embed(using:)` →
+`meanVector()` pipeline. When searched, Quiver's `cosineSimilarities()`
+ranks every product by meaning. Four CRUD endpoints, zero external
+services.
 
 ## Run it
 
-1. Clone this repo
-2. `swift run`
-3. Server starts on `http://localhost:8080`
+```bash
+swift run
+```
+
+Server starts on `http://localhost:8080`.
 
 ## Endpoints
 
-**POST /similarity** — Cosine similarity between two vectors. The operation that powers recommendation engines and duplicate detection, computed in microseconds.
+**List products:**
 
-**POST /search** — Batch cosine similarity against an entire catalog, returning the top-K matches. No vector index — Quiver computes directly on the arrays.
+```bash
+curl -s localhost:8080/products | jq
+```
 
-**POST /classify** — KNN classification on new data points using FeatureScaler for normalization. In production, the trained model would be loaded from Codable persistence rather than retrained per request.
+**Add a product** (Quiver tokenizes and embeds it automatically):
+
+```bash
+curl -s localhost:8080/products \
+  -H "Content-Type: application/json" \
+  -d '{"description": "durable waterproof trail shoes"}' -w "%{http_code}"
+```
+
+**Search by meaning** — finds products with similar concepts, not just matching words:
+
+```bash
+curl -s "localhost:8080/search?q=comfortable+running+shoes" | jq
+```
+
+```json
+[
+  {"rank": 1, "description": "comfortable cushioned shoes for easy running", "similarity": 0.99},
+  {"rank": 2, "description": "comfortable running shoes for everyday training", "similarity": 0.98},
+  {"rank": 3, "description": "comfortable lightweight shoes for easy walks", "similarity": 0.97}
+]
+```
+
+The `[Double]` that Vapor decodes from JSON is the same `[Double]` that
+Quiver computes on. No serialization boundary, no subprocess, no second
+runtime.
+
+**Remove a product:**
+
+```bash
+curl -s -X DELETE "localhost:8080/products/comfortable%20lightweight%20shoes%20for%20easy%20walks"
+```
 
 ## Quiver APIs used
 
-- `cosineOfAngle(with:)` — pairwise vector similarity
-- `cosineSimilarities(to:)` — batch similarity across a collection
-- `topIndices(k:)` — top-K selection without sorting the full array
-- `KNearestNeighbors.fit()`, `predict()` — classification in the request path
-- `FeatureScaler.fit()`, `transform()` — normalizing multi-scale features
+- `tokenize()` — split text into clean lowercase tokens
+- `embed(using:)` — look up word vectors from an embedding dictionary
+- `meanVector()` — average word vectors into a single document vector
+- `cosineSimilarities(to:)` — rank every product by similarity to the query
+- `topIndices(k:labels:)` — return the best matches with rank and score
 
 ## Learn more
 
 - [Quiver](https://github.com/waynewbishop/quiver) — the framework
-- [Quiver Cookbook](https://github.com/waynewbishop/quiver-cookbook) — 42 interactive recipes
+- [Quiver Cookbook](https://github.com/waynewbishop/quiver-cookbook) — 41 interactive recipes
 - [Quiver Documentation](https://waynewbishop.github.io/quiver/documentation/quiver/) — API reference and conceptual guides
 - [Swift Algorithms & Data Structures](https://waynewbishop.github.io/swift-algorithms/) — the companion book
