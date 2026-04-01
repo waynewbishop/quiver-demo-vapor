@@ -1,4 +1,4 @@
-# quiver-demo-vapor
+# Quiver Demo for Vapor
 
 Most search features match keywords — "running shoes" only finds results
 containing those exact words. Semantic search matches meaning instead,
