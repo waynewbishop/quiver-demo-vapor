@@ -3,34 +3,20 @@
 import PackageDescription
 
 let package = Package(
-    name: "QuiverDB",
+    name: "quiver-demo-vapor",
     platforms: [.macOS(.v13)],
-    products: [
-        .executable(name: "QuiverDB", targets: ["QuiverDB"])
-    ],
     dependencies: [
         .package(url: "https://github.com/vapor/vapor.git", from: "4.89.0"),
-        .package(url: "https://github.com/swift-server/swift-service-lifecycle.git", from: "2.0.0"),
-        .package(url: "https://github.com/waynewbishop/bishop-algorithms-quiver-package.git", from: "1.0.0")
+        .package(url: "https://github.com/waynewbishop/quiver.git", from: "1.0.0")
     ],
     targets: [
         .executableTarget(
-            name: "QuiverDB",
+            name: "App",
             dependencies: [
-                .product(name: "Quiver", package: "bishop-algorithms-quiver-package"),
-                .product(name: "Vapor", package: "vapor"),
-                .product(name: "ServiceLifecycle", package: "swift-service-lifecycle")
+                .product(name: "Quiver", package: "quiver"),
+                .product(name: "Vapor", package: "vapor")
             ],
-            path: "Sources/QuiverDB",
-            resources: [.copy("Resources/")]
-        ),
-        .testTarget(
-            name: "QuiverDBTests",
-            dependencies: [
-                "QuiverDB",
-                .product(name: "XCTVapor", package: "vapor")
-            ],
-            path: "Tests/QuiverDBTests"
+            path: "Sources/App"
         )
     ]
 )
