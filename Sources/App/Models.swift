@@ -50,6 +50,9 @@ let embeddings: [String: [Double]] = [
     "tempo":       [0.3, 0.4, 0.1, 0.6, 0.4, 0.0],
     "road":        [0.4, 0.6, 0.1, 0.7, 0.5, 0.0],
     "smooth":      [0.5, 0.7, 0.1, 0.7, 0.5, 0.0],
+    "plush":       [0.6, 0.9, 0.1, 0.7, 0.5, 0.0],
+    "rugged":      [0.5, 0.3, 0.1, 0.9, 0.4, 0.9],
+    "racer":       [0.1, 0.4, 0.0, 0.1, 0.5, 0.0],
 ]
 
 // MARK: - Product store
@@ -90,30 +93,30 @@ func seededStore() -> ProductStore {
     let store = ProductStore()
 
     // Super shoes — carbon plate racers for race day
-    store.add("Nike Vaporfly 3 — light carbon race super shoe")
-    store.add("New Balance SC Elite v5 — fast carbon plate race shoe")
-    store.add("ASICS Metaspeed Sky+ — light carbon race shoe")
+    store.add("Nike Vaporfly 3 — super fast carbon plate racer")
+    store.add("New Balance SC Elite v5 — race day carbon plate super shoe")
+    store.add("ASICS Metaspeed Sky+ — fast light carbon plate racer")
 
     // Daily trainers — the shoes runners wear most
-    store.add("Nike Pegasus 41 — reliable daily road trainer")
-    store.add("Adidas EVO SL — smooth daily road trainer")
-    store.add("ASICS Novablast 4 — bouncy cushioned daily trainer")
-    store.add("Brooks Ghost 16 — reliable neutral daily trainer")
-    store.add("Hoka Clifton 9 — lightweight cushioned daily shoe")
+    store.add("Nike Pegasus 41 — reliable durable road trainer")
+    store.add("Adidas EVO SL — smooth reliable road shoe")
+    store.add("ASICS Novablast 4 — bouncy soft daily shoe")
+    store.add("Brooks Ghost 16 — durable neutral road trainer")
+    store.add("Hoka Clifton 9 — soft light daily shoe")
 
     // Long run and recovery
-    store.add("New Balance 1080v14 — soft cushioned long run shoe")
+    store.add("New Balance 1080v14 — plush soft shoe for long run")
     store.add("Nike Invincible 3 — soft cushioned recovery shoe")
 
     // Stability
-    store.add("Brooks Adrenaline GTS 24 — stability support daily trainer")
+    store.add("Brooks Adrenaline GTS 24 — stability support shoe")
 
     // Trail
-    store.add("Hoka Speedgoat 6 — trail shoe with grip")
-    store.add("Salomon Ultra Glide 2 — cushioned trail run shoe")
+    store.add("Hoka Speedgoat 6 — rugged trail shoe with grip")
+    store.add("Salomon Ultra Glide 2 — soft trail run shoe")
 
     // Tempo
-    store.add("Saucony Kinvara 15 — light fast tempo trainer")
+    store.add("Saucony Kinvara 15 — fast light tempo trainer")
 
     return store
 }
