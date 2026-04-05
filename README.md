@@ -1,17 +1,18 @@
 # Quiver Demo for Vapor
 
-Most search features match keywords — "running shoes" only finds results
-containing those exact words. Semantic search matches meaning instead,
-so "comfortable running shoes" finds "cushioned shoes for easy walks"
-because the concepts are similar even when the words are different.
+Most shoe finders match keywords — searching "cushioned long run shoe"
+only finds results containing those exact words. Semantic search matches
+meaning instead, so a query finds the New Balance 1080 and Nike
+Invincible even when the descriptions use different words — because
+the concepts are similar.
 
 This demo uses [Quiver](https://github.com/waynewbishop/quiver) to add
-semantic search to a Vapor server. Products are stored as text
-descriptions. When added, each description is automatically converted
-to a numeric vector using Quiver's `tokenize()` → `embed(using:)` →
-`meanVector()` pipeline. When searched, Quiver's `cosineSimilarities()`
-ranks every product by meaning. Four CRUD endpoints, zero external
-services.
+semantic search to a Vapor server. The catalog contains 14 real running
+shoes that every runner will recognize. When added, each shoe's
+description is automatically converted to a numeric vector using
+Quiver's `tokenize()` → `embed(using:)` → `meanVector()` pipeline.
+When searched, Quiver's `cosineSimilarities()` ranks every shoe by
+meaning. Four CRUD endpoints, zero external services.
 
 ## Run it
 
@@ -23,31 +24,32 @@ Server starts on `http://localhost:8080`.
 
 ## Endpoints
 
-**List products:**
+**List all shoes:**
 
 ```bash
 curl -s localhost:8080/products | jq
 ```
 
-**Add a product** (Quiver tokenizes and embeds it automatically):
+**Add a shoe** (Quiver tokenizes and embeds it automatically):
 
 ```bash
 curl -s localhost:8080/products \
   -H "Content-Type: application/json" \
-  -d '{"description": "durable waterproof trail shoes"}' -w "%{http_code}"
+  -d '{"description": "Puma Deviate Nitro Elite 4 — light carbon race super shoe"}' \
+  -w "%{http_code}"
 ```
 
-**Search by meaning** — finds products with similar concepts, not just matching words:
+**Search by meaning:**
 
 ```bash
-curl -s "localhost:8080/search?q=comfortable+running+shoes" | jq
+curl -s "localhost:8080/search?q=cushioned+long+run+shoe" | jq
 ```
 
 ```json
 [
-  {"rank": 1, "description": "comfortable cushioned shoes for easy running", "similarity": 0.99},
-  {"rank": 2, "description": "comfortable running shoes for everyday training", "similarity": 0.98},
-  {"rank": 3, "description": "comfortable lightweight shoes for easy walks", "similarity": 0.97}
+  {"rank": 1, "description": "New Balance 1080v14 — soft cushioned long run shoe", "similarity": 0.999},
+  {"rank": 2, "description": "Hoka Clifton 9 — lightweight cushioned daily shoe", "similarity": 0.998},
+  {"rank": 3, "description": "Adidas EVO SL — smooth daily road trainer", "similarity": 0.998}
 ]
 ```
 
@@ -55,10 +57,20 @@ The `[Double]` that Vapor decodes from JSON is the same `[Double]` that
 Quiver computes on. No serialization boundary, no subprocess, no second
 runtime.
 
-**Remove a product:**
+**More searches to try:**
 
 ```bash
-curl -s -X DELETE "localhost:8080/products/comfortable%20lightweight%20shoes%20for%20easy%20walks"
+curl -s "localhost:8080/search?q=light+carbon+race+shoe" | jq
+curl -s "localhost:8080/search?q=stability+support" | jq
+curl -s "localhost:8080/search?q=trail+grip" | jq
+curl -s "localhost:8080/search?q=fast+tempo+shoe" | jq
+curl -s "localhost:8080/search?q=soft+recovery+shoe" | jq
+```
+
+**Remove a shoe:**
+
+```bash
+curl -s -X DELETE "localhost:8080/products/Saucony%20Kinvara%2015%20%E2%80%94%20light%20fast%20tempo%20trainer"
 ```
 
 ## Quiver APIs used
@@ -66,12 +78,12 @@ curl -s -X DELETE "localhost:8080/products/comfortable%20lightweight%20shoes%20f
 - `tokenize()` — split text into clean lowercase tokens
 - `embed(using:)` — look up word vectors from an embedding dictionary
 - `meanVector()` — average word vectors into a single document vector
-- `cosineSimilarities(to:)` — rank every product by similarity to the query
+- `cosineSimilarities(to:)` — rank every shoe by similarity to the query
 - `topIndices(k:labels:)` — return the best matches with rank and score
 
 ## Learn more
 
 - [Quiver](https://github.com/waynewbishop/quiver) — the framework
-- [Quiver Cookbook](https://github.com/waynewbishop/quiver-cookbook) — 41 interactive recipes
+- [Quiver Cookbook](https://github.com/waynewbishop/quiver-cookbook) — interactive recipes
 - [Quiver Documentation](https://waynewbishop.github.io/quiver/documentation/quiver/) — API reference and conceptual guides
 - [Swift Algorithms & Data Structures](https://waynewbishop.github.io/swift-algorithms/) — the companion book
