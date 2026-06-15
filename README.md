@@ -8,11 +8,18 @@ the concepts are similar.
 
 This demo uses [Quiver](https://github.com/waynewbishop/quiver) to add
 semantic search to a Vapor server. The catalog contains 14 real running
-shoes that every runner will recognize. When added, each shoe's
-description is automatically converted to a numeric vector using
-Quiver's `tokenize()` → `embed(using:)` → `meanVector()` pipeline.
-When searched, Quiver's `cosineSimilarities()` ranks every shoe by
-meaning. Four CRUD endpoints, zero external services.
+shoes that every runner will recognize. Each shoe's description is turned
+into a numeric vector by an `Embedder` — Quiver's contract for converting
+text to a vector, here backed by a word-vector table. When a runner
+searches, `mostSimilar(to:k:)` ranks every shoe by meaning. Swapping the
+word-vector table for an on-device sentence model later changes only the
+embedder; the routes stay as written. Four CRUD endpoints, zero external
+services.
+
+This `/search` route is the retrieval half of a RAG pipeline: it finds the
+most relevant catalog entries for a query. A language model, fed those
+results as context, would supply the generation half — but Quiver's role
+is the retrieval, and the demo stops there.
 
 ## Run it
 
@@ -46,12 +53,27 @@ curl -s "localhost:8080/search?q=cushioned+long+run+shoe" | jq
 ```
 
 ```json
-[
-  {"rank": 1, "description": "New Balance 1080v14 — soft cushioned long run shoe", "similarity": 0.999},
-  {"rank": 2, "description": "Hoka Clifton 9 — lightweight cushioned daily shoe", "similarity": 0.998},
-  {"rank": 3, "description": "Adidas EVO SL — smooth daily road trainer", "similarity": 0.998}
-]
+{
+  "results": [
+    {"rank": 1, "description": "ASICS Novablast 4 — bouncy soft daily shoe", "similarity": 0.9997, "zScore": 0.75},
+    {"rank": 2, "description": "New Balance 1080v14 — plush soft shoe for long run", "similarity": 0.9989, "zScore": 0.74},
+    {"rank": 3, "description": "Adidas EVO SL — smooth reliable road shoe", "similarity": 0.9984, "zScore": 0.73}
+  ],
+  "stats": {
+    "catalogSize": 14,
+    "mean": 0.9476,
+    "standardDeviation": 0.0697
+  }
+}
 ```
+
+A raw similarity of 0.9997 is hard to interpret on its own. The same
+hit expressed as a z-score above the catalog mean tells callers whether
+the top match is well-separated from the rest of the catalog or just
+barely above the crowd. The response is computed in one pass:
+`mostSimilar(to:k:)` returns the ranked hits, `cosineSimilarities()`
+returns the full distribution, and `mean()` and `standardDeviation()`
+summarize it so each hit carries a z-score against that distribution.
 
 The `[Double]` that Vapor decodes from JSON is the same `[Double]` that
 Quiver computes on. No serialization boundary, no subprocess, no second
@@ -75,11 +97,13 @@ curl -s -X DELETE "localhost:8080/products/Saucony%20Kinvara%2015%20%E2%80%94%20
 
 ## Quiver APIs used
 
+- `Embedder` — the contract for turning text into a vector; the demo's `ShoeEmbedder` conforms by averaging word vectors
 - `tokenize()` — split text into clean lowercase tokens
 - `embed(using:)` — look up word vectors from an embedding dictionary
 - `meanVector()` — average word vectors into a single document vector
-- `cosineSimilarities(to:)` — rank every shoe by similarity to the query
-- `topIndices(k:labels:)` — return the best matches with rank and score
+- `mostSimilar(to:k:)` — rank stored `(text, vector)` pairs against the query and return the top matches with rank, text, and score
+- `cosineSimilarities(to:)` — score the query against the whole catalog for the similarity distribution
+- `mean()` / `standardDeviation()` — summarize that distribution so callers see each hit as a z-score, not just a raw score
 
 ## Learn more
 

@@ -46,12 +46,30 @@ func routes(_ app: Application) throws {
     // similarity. The NB 1080 and Nike Invincible float to the top
     // because their vectors point in the same direction as the query —
     // even though the exact words don't match.
-    app.get("search") { request -> [SearchResult] in
+    //
+    // The response also returns Quiver's mean() and standardDeviation()
+    // over the full catalog of similarity scores, plus a z-score on
+    // every hit. Callers see not just "0.82" but "2.1 SD above catalog
+    // mean" — a confident match versus a noisy one.
+    app.get("search") { request throws -> SearchResponse in
         guard let query = request.query[String.self, at: "q"] else {
             throw Abort(.badRequest, reason: "Missing query parameter ?q=")
         }
-        return store.search(query: query).map {
-            SearchResult(rank: $0.rank, description: $0.label, similarity: $0.score)
+        guard let outcome = store.searchWithStats(query: query) else {
+            throw Abort(.badRequest, reason: "Query produced no embedding")
         }
+        let mean = outcome.distribution.mean() ?? 0.0
+        let std = outcome.distribution.standardDeviation() ?? 0.0
+        let results = outcome.top.map { hit -> SearchResult in
+            let z = std > 0 ? (hit.score - mean) / std : 0.0
+            return SearchResult(rank: hit.rank,
+                                description: hit.text,
+                                similarity: hit.score,
+                                zScore: z)
+        }
+        let stats = SearchStats(catalogSize: outcome.distribution.count,
+                                mean: mean,
+                                standardDeviation: std)
+        return SearchResponse(results: results, stats: stats)
     }
 }

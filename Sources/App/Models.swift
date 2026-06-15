@@ -55,33 +55,66 @@ let embeddings: [String: [Double]] = [
     "racer":       [0.1, 0.4, 0.0, 0.1, 0.5, 0.0],
 ]
 
+// MARK: - Embedding source
+
+// The Embedder protocol is Quiver's contract for turning text into a vector:
+// one method, text in and [Double] out. The store depends on this contract,
+// not on the table behind it — so swapping this word-vector source for an
+// on-device sentence model later changes only this type, and every line that
+// ranks and reports stays as written.
+struct ShoeEmbedder: Embedder {
+    let table: [String: [Double]]
+
+    func embed(_ text: String) -> [Double]? {
+        // tokenize → look each word up → average into one document vector.
+        text.tokenize().embed(using: table).meanVector()
+    }
+}
+
 // MARK: - Product store
 
-// Each shoe is a description paired with its semantic vector.
-// add() handles the full pipeline: tokenize → embed → meanVector.
+// Each shoe is a description paired with its semantic vector. add() runs the
+// description through the Embedder; search ranks queries against the catalog.
 final class ProductStore: @unchecked Sendable {
-    var shoes: [(description: String, vector: [Double])] = []
+    let embedder: ShoeEmbedder
+    var shoes: [(text: String, vector: [Double])] = []
+
+    init(embedder: ShoeEmbedder) {
+        self.embedder = embedder
+    }
 
     func add(_ description: String) {
-        let tokens = description.tokenize()
-        guard let vector = tokens.embed(using: embeddings).meanVector() else { return }
+        guard let vector = embedder.embed(description) else { return }
         shoes.append((description, vector))
     }
 
     func remove(_ description: String) -> Bool {
-        guard let index = shoes.firstIndex(where: { $0.description == description }) else { return false }
+        guard let index = shoes.firstIndex(where: { $0.text == description }) else { return false }
         shoes.remove(at: index)
         return true
     }
 
-    var descriptions: [String] { shoes.map(\.description) }
+    var descriptions: [String] { shoes.map(\.text) }
 
-    func search(query: String, topK: Int = 3) -> [(rank: Int, label: String, score: Double)] {
-        let tokens = query.tokenize()
-        guard let queryVector = tokens.embed(using: embeddings).meanVector() else { return [] }
-        return shoes.map(\.vector)
-            .cosineSimilarities(to: queryVector)
-            .topIndices(k: topK, labels: descriptions)
+    // Rank a query against the catalog using the 1.4.0 ranking surface.
+    // mostSimilar(to:k:) scores every stored pair by cosine similarity and
+    // returns the top matches with their text attached — the retrieval half
+    // of a RAG pipeline, where these hits become the context for a model.
+    func search(query: String, topK: Int = 3) -> [(rank: Int, text: String, score: Double)] {
+        guard let queryVector = embedder.embed(query) else { return [] }
+        return shoes.mostSimilar(to: queryVector, k: topK)
+    }
+
+    // Same ranking, but also returns the full similarity distribution across
+    // the catalog so callers can express each hit as a z-score against the
+    // population it came from.
+    func searchWithStats(query: String, topK: Int = 3)
+        -> (top: [(rank: Int, text: String, score: Double)], distribution: [Double])?
+    {
+        guard let queryVector = embedder.embed(query) else { return nil }
+        let top = shoes.mostSimilar(to: queryVector, k: topK)
+        let distribution = shoes.map(\.vector).cosineSimilarities(to: queryVector)
+        return (top, distribution)
     }
 }
 
@@ -90,7 +123,7 @@ final class ProductStore: @unchecked Sendable {
 // 15 real running shoes across 6 categories. Descriptions use
 // runner language — every runner will recognize these names.
 func seededStore() -> ProductStore {
-    let store = ProductStore()
+    let store = ProductStore(embedder: ShoeEmbedder(table: embeddings))
 
     // Super shoes — carbon plate racers for race day
     store.add("Nike Vaporfly 3 — super fast carbon plate racer")
@@ -124,4 +157,25 @@ func seededStore() -> ProductStore {
 // MARK: - Request / Response
 
 struct AddRequest: Content { let description: String }
-struct SearchResult: Content { let rank: Int; let description: String; let similarity: Double }
+struct SearchResult: Content {
+    let rank: Int
+    let description: String
+    let similarity: Double
+    // How many standard deviations above the catalog mean this hit
+    // sits — a 2.1 means "rare match," a 0.4 means "barely separated
+    // from the crowd."
+    let zScore: Double
+}
+
+// Catalog-wide similarity distribution for this query. Lets clients
+// judge whether the top hits are well-separated or noisy.
+struct SearchStats: Content {
+    let catalogSize: Int
+    let mean: Double
+    let standardDeviation: Double
+}
+
+struct SearchResponse: Content {
+    let results: [SearchResult]
+    let stats: SearchStats
+}
