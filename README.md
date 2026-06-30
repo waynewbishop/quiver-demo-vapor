@@ -10,11 +10,12 @@ This demo uses [Quiver](https://github.com/waynewbishop/quiver) to add
 semantic search to a Vapor server. The catalog contains 14 real running
 shoes that every runner will recognize. Each shoe's description is turned
 into a numeric vector by an `Embedder` — Quiver's contract for converting
-text to a vector, here backed by a word-vector table. When a runner
-searches, `mostSimilar(to:k:)` ranks every shoe by meaning. Swapping the
-word-vector table for an on-device sentence model later changes only the
-embedder; the routes stay as written. Four CRUD endpoints, zero external
-services.
+text to a vector, here backed by a word-vector table — and stored in an
+`EmbeddingIndex`, Quiver's on-device vector store. When a runner searches,
+`index.retrieve(query, k:)` embeds the query and ranks every shoe by
+meaning in one call. Swapping the word-vector table for an on-device
+sentence model later changes only the embedder; the routes stay as
+written. Four CRUD endpoints, zero external services.
 
 This `/search` route is the retrieval half of a RAG pipeline: it finds the
 most relevant catalog entries for a query. A language model, fed those
@@ -70,10 +71,10 @@ curl -s "localhost:8080/search?q=cushioned+long+run+shoe" | jq
 A raw similarity of 0.9997 is hard to interpret on its own. The same
 hit expressed as a z-score above the catalog mean tells callers whether
 the top match is well-separated from the rest of the catalog or just
-barely above the crowd. The response is computed in one pass:
-`mostSimilar(to:k:)` returns the ranked hits, `cosineSimilarities()`
-returns the full distribution, and `mean()` and `standardDeviation()`
-summarize it so each hit carries a z-score against that distribution.
+barely above the crowd. One call carries it all: `index.retrieve(query, k:)`
+returns a `RetrievalResult` with the ranked `hits`, the full score field,
+and its `mean` and `standardDeviation` already computed — so each hit's
+z-score is read straight off the result, nothing recomputed by hand.
 
 The `[Double]` that Vapor decodes from JSON is the same `[Double]` that
 Quiver computes on. No serialization boundary, no subprocess, no second
@@ -101,9 +102,9 @@ curl -s -X DELETE "localhost:8080/products/Saucony%20Kinvara%2015%20%E2%80%94%20
 - `tokenize()` — split text into clean lowercase tokens
 - `embed(using:)` — look up word vectors from an embedding dictionary
 - `meanVector()` — average word vectors into a single document vector
-- `mostSimilar(to:k:)` — rank stored `(text, vector)` pairs against the query and return the top matches with rank, text, and score
-- `cosineSimilarities(to:)` — score the query against the whole catalog for the similarity distribution
-- `mean()` / `standardDeviation()` — summarize that distribution so callers see each hit as a z-score, not just a raw score
+- `EmbeddingIndex` — the on-device vector store; `add(_:label:)` embeds each shoe once at ingest, `retrieve(_:k:)` ranks a query against the whole catalog in one call
+- `RetrievalResult` — the outcome of a retrieval: ranked `hits` (rank, label, score) plus the full score field with its `mean` and `standardDeviation` already computed
+- `zScore(of:)` — express a hit's similarity as standard deviations above the catalog mean, so callers see separation, not just a raw score
 
 ## Learn more
 

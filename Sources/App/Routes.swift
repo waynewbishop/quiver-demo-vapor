@@ -13,9 +13,10 @@ import Quiver
 func routes(_ app: Application) throws {
 
     // The store is seeded with 15 real running shoes at startup.
-    // Each shoe's description has already been converted to a
-    // semantic vector by Quiver's tokenize → embed → meanVector
-    // pipeline. Runners will recognize every shoe in the catalog.
+    // Each shoe's description has already been embedded once into
+    // Quiver's EmbeddingIndex — the on-device vector store — so a
+    // search ranks against precomputed vectors. Runners will
+    // recognize every shoe in the catalog.
     let store = seededStore()
 
     // List all shoes in the catalog
@@ -41,35 +42,39 @@ func routes(_ app: Application) throws {
     }
 
     // Semantic search — the hero endpoint. A plain text query like
-    // "cushioned long run shoe" is converted to a vector, then
-    // Quiver's cosineSimilarities ranks every shoe by directional
-    // similarity. The NB 1080 and Nike Invincible float to the top
-    // because their vectors point in the same direction as the query —
-    // even though the exact words don't match.
+    // "cushioned long run shoe" is handed to EmbeddingIndex.retrieve,
+    // which embeds it and ranks every shoe by directional similarity.
+    // The NB 1080 and Nike Invincible float to the top because their
+    // vectors point in the same direction as the query — even though
+    // the exact words don't match.
     //
-    // The response also returns Quiver's mean() and standardDeviation()
-    // over the full catalog of similarity scores, plus a z-score on
-    // every hit. Callers see not just "0.82" but "2.1 SD above catalog
-    // mean" — a confident match versus a noisy one.
+    // The RetrievalResult carries the full score distribution — mean,
+    // standardDeviation, and a z-score on every hit. Callers see not
+    // just "0.82" but "2.1 SD above catalog mean" — a confident match
+    // versus a noisy one.
     app.get("search") { request throws -> SearchResponse in
         guard let query = request.query[String.self, at: "q"] else {
             throw Abort(.badRequest, reason: "Missing query parameter ?q=")
         }
-        guard let outcome = store.searchWithStats(query: query) else {
+        // One call ranks the catalog and carries the score distribution with it.
+        let result = store.search(query: query)
+        guard !result.hits.isEmpty else {
             throw Abort(.badRequest, reason: "Query produced no embedding")
         }
-        let mean = outcome.distribution.mean() ?? 0.0
-        let std = outcome.distribution.standardDeviation() ?? 0.0
-        let results = outcome.top.map { hit -> SearchResult in
-            let z = std > 0 ? (hit.score - mean) / std : 0.0
-            return SearchResult(rank: hit.rank,
-                                description: hit.text,
-                                similarity: hit.score,
-                                zScore: z)
+        // The result already holds the catalog-wide mean and standard deviation —
+        // each hit's z-score is its similarity standardized against that field,
+        // which the score array's own zScore(of:) computes.
+        var results: [SearchResult] = []
+        for hit in result.hits {
+            let z = result.scores.zScore(of: hit.score) ?? 0.0
+            results.append(SearchResult(rank: hit.rank,
+                                        description: hit.label,
+                                        similarity: hit.score,
+                                        zScore: z))
         }
-        let stats = SearchStats(catalogSize: outcome.distribution.count,
-                                mean: mean,
-                                standardDeviation: std)
+        let stats = SearchStats(catalogSize: result.scores.count,
+                                mean: result.mean,
+                                standardDeviation: result.standardDeviation)
         return SearchResponse(results: results, stats: stats)
     }
 }

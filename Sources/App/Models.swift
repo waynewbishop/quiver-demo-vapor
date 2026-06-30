@@ -73,48 +73,44 @@ struct ShoeEmbedder: Embedder {
 
 // MARK: - Product store
 
-// Each shoe is a description paired with its semantic vector. add() runs the
-// description through the Embedder; search ranks queries against the catalog.
+// A thin wrapper over Quiver's EmbeddingIndex — the on-device vector store
+// shipped in 1.5.0. The index owns the embed → score → rank pipeline: add()
+// embeds each description once at ingest, and retrieve() embeds only the query,
+// scores it against the whole catalog by cosine similarity, and returns the
+// ranked hits alongside the full score distribution. The store no longer keeps
+// a parallel [(text, vector)] array or recomputes similarities by hand.
 final class ProductStore: @unchecked Sendable {
-    let embedder: ShoeEmbedder
-    var shoes: [(text: String, vector: [Double])] = []
+    private var index: EmbeddingIndex<String>
 
     init(embedder: ShoeEmbedder) {
-        self.embedder = embedder
+        self.index = EmbeddingIndex(embedder: embedder)
     }
 
     func add(_ description: String) {
-        guard let vector = embedder.embed(description) else { return }
-        shoes.append((description, vector))
+        // The description is both the text to embed and the label stored beside
+        // its vector, so a hit carries its shoe name back unchanged.
+        index.add(description, label: description)
     }
 
     func remove(_ description: String) -> Bool {
-        guard let index = shoes.firstIndex(where: { $0.text == description }) else { return false }
-        shoes.remove(at: index)
-        return true
+        let before = index.count
+        index.remove(label: description)
+        return index.count < before
     }
 
-    var descriptions: [String] { shoes.map(\.text) }
-
-    // Rank a query against the catalog using the 1.4.0 ranking surface.
-    // mostSimilar(to:k:) scores every stored pair by cosine similarity and
-    // returns the top matches with their text attached — the retrieval half
-    // of a RAG pipeline, where these hits become the context for a model.
-    func search(query: String, topK: Int = 3) -> [(rank: Int, text: String, score: Double)] {
-        guard let queryVector = embedder.embed(query) else { return [] }
-        return shoes.mostSimilar(to: queryVector, k: topK)
+    var descriptions: [String] {
+        var result: [String] = []
+        for entry in index { result.append(entry.label) }
+        return result
     }
 
-    // Same ranking, but also returns the full similarity distribution across
-    // the catalog so callers can express each hit as a z-score against the
-    // population it came from.
-    func searchWithStats(query: String, topK: Int = 3)
-        -> (top: [(rank: Int, text: String, score: Double)], distribution: [Double])?
-    {
-        guard let queryVector = embedder.embed(query) else { return nil }
-        let top = shoes.mostSimilar(to: queryVector, k: topK)
-        let distribution = shoes.map(\.vector).cosineSimilarities(to: queryVector)
-        return (top, distribution)
+    // Rank a query against the catalog. retrieve(_:k:) returns a RetrievalResult
+    // carrying both the top-k hits and the full score field they were drawn from
+    // — mean, standardDeviation, and topZScore — so a caller reads each hit's
+    // separation from the crowd without recomputing anything. These hits are the
+    // retrieval half of a RAG pipeline, where they become the context for a model.
+    func search(query: String, topK: Int = 3) -> RetrievalResult<String> {
+        index.retrieve(query, k: topK)
     }
 }
 

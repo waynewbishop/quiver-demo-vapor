@@ -7,7 +7,7 @@ let package = Package(
     platforms: [.macOS(.v13)],
     dependencies: [
         .package(url: "https://github.com/vapor/vapor.git", from: "4.89.0"),
-        .package(url: "https://github.com/waynewbishop/quiver.git", from: "1.4.0")
+        .package(url: "https://github.com/waynewbishop/quiver.git", from: "1.5.0")
     ],
     targets: [
         .executableTarget(
