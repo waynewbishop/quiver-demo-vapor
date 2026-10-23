@@ -116,7 +116,7 @@ final class ProductStore: @unchecked Sendable {
 
 // MARK: - Seed data
 
-// 15 real running shoes across 6 categories. Descriptions use
+// 14 real running shoes across 6 categories. Descriptions use
 // runner language — every runner will recognize these names.
 func seededStore() -> ProductStore {
     let store = ProductStore(embedder: ShoeEmbedder(table: embeddings))

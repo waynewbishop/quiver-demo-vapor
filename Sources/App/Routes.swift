@@ -12,7 +12,7 @@ import Quiver
 
 func routes(_ app: Application) throws {
 
-    // The store is seeded with 15 real running shoes at startup.
+    // The store is seeded with 14 real running shoes at startup.
     // Each shoe's description has already been embedded once into
     // Quiver's EmbeddingIndex — the on-device vector store — so a
     // search ranks against precomputed vectors. Runners will
@@ -44,7 +44,7 @@ func routes(_ app: Application) throws {
     // Semantic search — the hero endpoint. A plain text query like
     // "cushioned long run shoe" is handed to EmbeddingIndex.retrieve,
     // which embeds it and ranks every shoe by directional similarity.
-    // The NB 1080 and Nike Invincible float to the top because their
+    // The ASICS Novablast and NB 1080 float to the top because their
     // vectors point in the same direction as the query — even though
     // the exact words don't match.
     //

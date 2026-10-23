@@ -2,8 +2,8 @@
 
 Most shoe finders match keywords — searching "cushioned long run shoe"
 only finds results containing those exact words. Semantic search matches
-meaning instead, so a query finds the New Balance 1080 and Nike
-Invincible even when the descriptions use different words — because
+meaning instead, so a query finds the ASICS Novablast and New Balance
+1080 even when the descriptions use different words — because
 the concepts are similar.
 
 This demo uses [Quiver](https://github.com/waynewbishop/quiver) to add
